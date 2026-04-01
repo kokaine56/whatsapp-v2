@@ -29,12 +29,18 @@ import {
 } from 'lucide-react';
 
 const App = () => {
+  // ==========================================
+  // 🔒 SECURITY SETTINGS
+  // ==========================================
+  const ENABLE_LOCKSCREEN = true; // Set to false to skip the login screen entirely
+  const MASTER_PASSCODE = '911612'; 
+  // ==========================================
+
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [accessKey, setAccessKey] = useState('');
   const [authError, setAuthError] = useState(false);
 
   const [numbersInput, setNumbersInput] = useState('');
-  // 5 message variants for anti-ban
   const [messages, setMessages] = useState([
     'Hello {name}, your order #{id} is ready!',
     '',
@@ -49,6 +55,9 @@ const App = () => {
   const [delayInterval, setDelayInterval] = useState(30);
   const [memoryCount, setMemoryCount] = useState(0);
 
+  // New state to control the manual popup of the Auth Modal
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
   const [consoleOutput, setConsoleOutput] = useState([
     { time: new Date().toLocaleTimeString(), msg: "SYSTEM: Interface initialized. Awaiting engine handshake..." }
   ]);
@@ -61,7 +70,7 @@ const App = () => {
 
   const handleLogin = (e) => {
     e.preventDefault();
-    if (accessKey === '887654') {
+    if (accessKey === 101010) {
       setIsAuthenticated(true);
       setAuthError(false);
       addLog("SYSTEM: Authentication successful. Access granted.");
@@ -79,7 +88,7 @@ const App = () => {
 
   // 1. Live Server & Background Campaign Polling
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (ENABLE_LOCKSCREEN && !isAuthenticated) return;
 
     const checkServerStatus = async () => {
       try {
@@ -90,6 +99,7 @@ const App = () => {
           setStatus(data.status);
           if (data.status === 'CONNECTED') {
             addLog("AUTH: WhatsApp session actively linked.");
+            setShowAuthModal(false); // Auto-close modal when connected
           }
           if (data.status === 'PAIRING') addLog("AUTH: Engine awaiting QR verification.");
         }
@@ -126,7 +136,7 @@ const App = () => {
   }, [status, isAuthenticated, isProcessing]);
 
   const handleConnect = () => {
-    setStatus('PAIRING');
+    setShowAuthModal(true);
     addLog("REQ: Generating secure pairing token...");
   };
 
@@ -314,7 +324,7 @@ const App = () => {
   };
 
   // --- Render Lockscreen (Power UI Upgrade) ---
-  if (!isAuthenticated) {
+  if (ENABLE_LOCKSCREEN && !isAuthenticated) {
     return (
       <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-[#030712] to-[#030712] text-slate-300 font-sans selection:bg-emerald-500/30 flex items-center justify-center p-4 relative overflow-hidden">
         
@@ -367,18 +377,18 @@ const App = () => {
           </div>
           
           <p className="text-center text-[10px] font-mono text-slate-600 mt-6 tracking-widest uppercase">
-            v3.5 Build &bull; Encrypted Protocol
+            v3.6 Build &bull; Encrypted Protocol
           </p>
         </div>
       </div>
     );
   }
 
-  // --- Render Main Dashboard (Power UI Upgrade) ---
+  // --- Render Main Dashboard ---
   return (
     <div className="min-h-screen bg-[#030712] text-slate-300 font-sans selection:bg-emerald-500/30">
       
-      {/* Sleek Glassmorphism Header */}
+      {/* Header */}
       <header className="border-b border-white/5 bg-[#090E1A]/80 backdrop-blur-2xl sticky top-0 z-40">
         <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row justify-between items-center gap-4 px-4 sm:px-6 py-3">
           
@@ -387,7 +397,7 @@ const App = () => {
               <Cpu size={20} strokeWidth={1.5} />
             </div>
             <div className="min-w-0">
-              <h1 className="text-[15px] font-bold text-white tracking-wide truncate">NEXUS<span className="text-emerald-400">/SENDER</span></h1>
+              <h1 className="text-[15px] font-bold text-white tracking-wide truncate">WhatsApp Message Sender</h1>
               <div className="flex items-center gap-2 mt-1">
                 <div className="relative flex h-2 w-2">
                   {status === 'CONNECTED' && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
@@ -412,9 +422,11 @@ const App = () => {
                 <LogOut size={14}/> Disconnect Engine
               </button>
             ) : (
-              <button onClick={handleConnect} disabled={status === 'PAIRING'} className="w-full sm:w-auto flex justify-center items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl disabled:opacity-50 disabled:grayscale shadow-[0_0_20px_rgba(5,150,105,0.2)] hover:shadow-[0_0_25px_rgba(5,150,105,0.4)] text-xs font-bold tracking-wide transition-all border border-emerald-500/50">
-                {status === 'PAIRING' ? <Loader2 size={16} className="animate-spin"/> : <QrCode size={16}/>} 
-                Authorize Device
+              <button 
+                onClick={handleConnect} 
+                className="w-full sm:w-auto flex justify-center items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-[0_0_20px_rgba(5,150,105,0.2)] hover:shadow-[0_0_25px_rgba(5,150,105,0.4)] text-xs font-bold tracking-wide transition-all border border-emerald-500/50"
+              >
+                <QrCode size={16}/> Authorize Device
               </button>
             )}
           </div>
@@ -727,8 +739,8 @@ const App = () => {
         </div>
       </main>
 
-      {/* Connection Modal (Power UI) */}
-      {status === 'PAIRING' && (
+      {/* Manual Connection Modal (Power UI) */}
+      {showAuthModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-[#030712]/90 backdrop-blur-md animate-in fade-in duration-300"></div>
           <div className="bg-[#090E1A] rounded-[2rem] border border-emerald-500/20 shadow-[0_0_100px_rgba(16,185,129,0.15)] max-w-sm w-full p-8 md:p-10 text-center animate-in zoom-in slide-in-from-bottom-8 duration-500 relative z-10 overflow-hidden">
@@ -759,11 +771,11 @@ const App = () => {
              
              <button 
               onClick={() => {
-                setStatus('DISCONNECTED');
+                setShowAuthModal(false);
               }}
               className="mt-8 md:mt-10 block w-full text-center text-[10px] md:text-xs font-bold tracking-widest text-slate-500 hover:text-rose-400 uppercase transition-colors"
              >
-               Abort Connection
+               Dismiss
              </button>
 
              <style>{`
