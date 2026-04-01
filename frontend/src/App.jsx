@@ -33,7 +33,7 @@ const App = () => {
   // 🔒 SECURITY SETTINGS
   // ==========================================
   const ENABLE_LOCKSCREEN = true; // Set to false to skip the login screen entirely
-  const MASTER_PASSCODE = '911612'; 
+  const MASTER_PASSCODE = '911612'; // Your password variable
   // ==========================================
 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
