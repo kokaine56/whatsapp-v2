@@ -33,7 +33,10 @@ const App = () => {
   // 🔒 SECURITY SETTINGS
   // ==========================================
   const ENABLE_LOCKSCREEN = true; // Set to false to skip the login screen entirely
-  const MASTER_PASSCODE = '911612'; // Your password variable
+  
+  // Reads from Railway Environment Variables. 
+  // If not set in Railway, it defaults to '101010'.
+  const MASTER_PASSCODE = import.meta.env.VITE_MASTER_PASSCODE || '101010';
   // ==========================================
 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
