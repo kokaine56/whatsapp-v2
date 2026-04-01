@@ -113,7 +113,7 @@ const App = () => {
       } catch (err) {
         if (status !== 'DISCONNECTED') {
           setStatus('DISCONNECTED');
-          addLog("Connection to Local Node Server lost.");
+          addLog("Connection to Local Node Server lost. Ensure backend is running.");
         }
       }
     };
@@ -174,7 +174,10 @@ const App = () => {
   };
 
   const downloadCSV = () => {
-    if (queue.length === 0) return;
+    if (queue.length === 0) {
+      addLog("Error: Queue is empty. Nothing to download.");
+      return;
+    }
     
     // Export ONLY the numbers, one per line, making it perfect for re-uploading
     const csvContent = queue.map(item => item.number).join('\n');
@@ -193,11 +196,15 @@ const App = () => {
   };
 
   const importContacts = () => {
-    if (!numbersInput.trim()) return;
-    const lines = numbersInput.split('\n');
-    addLog(`Staging ${lines.length} contacts locally...`);
+    if (!numbersInput.trim()) {
+      addLog("Input Error: Text box is empty. Please paste numbers first.");
+      return;
+    }
     
+    const lines = numbersInput.split('\n');
     const newItems = [];
+    let invalidCount = 0;
+
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed) continue;
@@ -210,7 +217,7 @@ const App = () => {
 
       if (trimmed.includes(',')) {
         const parts = trimmed.split(',').map(p => p.trim().replace(/^"|"$/g, ''));
-        name = parts[0] || '';
+        name = parts[0] || 'Client';
         number = (parts[1] || '').replace(/\D/g, '');
         extraId = parts[2] || extraId;
       } else {
@@ -218,11 +225,8 @@ const App = () => {
       }
 
       // Smart "91" handling: only add if exactly 10 digits and lacks 91. 
-      // If it starts with 91 and is 12 digits, leave it as is.
       if (number.length === 10) {
         number = '91' + number;
-      } else if (number.startsWith('91') && number.length > 10) {
-        // Keeps the existing 91 prefix safe
       }
 
       if (number && number.length >= 10) {
@@ -233,24 +237,39 @@ const App = () => {
           varId: extraId,
           status: 'pending'
         });
+      } else {
+        invalidCount++;
       }
     }
-    setQueue(prev => [...prev, ...newItems]);
-    setNumbersInput('');
+
+    if (newItems.length > 0) {
+      setQueue(prev => [...prev, ...newItems]);
+      setNumbersInput('');
+      addLog(`Success: Staged ${newItems.length} valid contacts to queue.`);
+    } else {
+      addLog("Parse Error: Could not find any valid 10+ digit numbers.");
+    }
+
+    if (invalidCount > 0) {
+      addLog(`Warning: Ignored ${invalidCount} invalid rows or empty lines.`);
+    }
   };
 
   const startBulkProcess = async () => {
-    if (status !== 'CONNECTED' || queue.length === 0) return;
+    if (status !== 'CONNECTED') {
+      addLog("Action Denied: WhatsApp is not currently connected.");
+      return;
+    }
     
-    const activeMessages = messages.filter(m => m.trim() !== '');
-    if (activeMessages.length === 0) {
-      addLog("Please enter at least one message template.");
+    const pending = queue.filter(i => i.status === 'pending');
+    if (pending.length === 0) {
+      addLog("Action Denied: No pending contacts in the queue to message.");
       return;
     }
 
-    const pending = queue.filter(i => i.status === 'pending');
-    if (pending.length === 0) {
-      addLog("No pending contacts to send to.");
+    const activeMessages = messages.filter(m => m.trim() !== '');
+    if (activeMessages.length === 0) {
+      addLog("Action Denied: Please enter at least one message template.");
       return;
     }
 
@@ -261,7 +280,7 @@ const App = () => {
       const randomMsg = activeMessages[Math.floor(Math.random() * activeMessages.length)];
       
       const personalized = randomMsg
-        .replace(/{name}/g, item.name || 'there') // Fallback if no name provided
+        .replace(/{name}/g, item.name || 'Client') // Fallback if no name provided
         .replace(/{id}/g, item.varId);
         
       return { id: item.id, number: item.number, name: item.name, message: personalized };
@@ -276,13 +295,13 @@ const App = () => {
 
       if (res.ok) {
         setIsProcessing(true);
-        addLog(`Campaign handed over successfully.`);
+        addLog(`Campaign handed over successfully. Engine has taken over.`);
       } else {
         const errData = await res.json();
-        addLog(`Node Engine rejected payload: ${errData.error}`);
+        addLog(`Server Rejected Payload: ${errData.error}`);
       }
     } catch (err) {
-      addLog("Network Error: Could not reach Node Engine.");
+      addLog("Network Error: Could not reach Node Engine. Check your backend connection.");
     }
   };
 
@@ -424,7 +443,7 @@ const App = () => {
             />
             <button 
               onClick={importContacts}
-              disabled={!numbersInput.trim() || isProcessing}
+              disabled={isProcessing}
               className="w-full mt-4 py-3 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-2 border border-slate-700/50 shadow-sm"
             >
               <Plus size={16}/> Stage to Queue
@@ -465,6 +484,7 @@ const App = () => {
             </div>
           </div>
 
+          {/* Explicit Diagnostics Terminal */}
           <div className="bg-[#020617] rounded-2xl border border-slate-800/60 overflow-hidden shadow-lg relative hidden sm:block">
             <div className="bg-slate-900/50 p-3 flex items-center justify-between border-b border-slate-800/60">
               <div className="flex items-center gap-2">
@@ -481,7 +501,7 @@ const App = () => {
               {consoleOutput.map((log, i) => (
                 <div key={i} className="flex gap-2 md:gap-3 break-words">
                   <span className="text-slate-600 shrink-0">[{log.time}]</span>
-                  <span className={log.msg.includes('success') || log.msg.includes('CONNECTED') || log.msg.includes('Exported') || log.msg.includes('Loaded') ? 'text-emerald-400/90' : (log.msg.includes('Error') || log.msg.includes('lost') || log.msg.includes('Failed') || log.msg.includes('abort') ? 'text-rose-400/90' : 'text-slate-400')}>
+                  <span className={log.msg.includes('success') || log.msg.includes('Success') || log.msg.includes('CONNECTED') || log.msg.includes('Exported') || log.msg.includes('Loaded') ? 'text-emerald-400/90' : (log.msg.includes('Error') || log.msg.includes('Denied') || log.msg.includes('lost') || log.msg.includes('Failed') || log.msg.includes('abort') ? 'text-rose-400/90' : 'text-slate-400')}>
                     {log.msg}
                   </span>
                 </div>
@@ -548,7 +568,7 @@ const App = () => {
                 ) : (
                   <button 
                     onClick={startBulkProcess}
-                    disabled={status !== 'CONNECTED' || queue.filter(q => q.status === 'pending').length === 0}
+                    disabled={status !== 'CONNECTED'}
                     className="flex-1 sm:flex-none flex justify-center items-center gap-2 px-4 md:px-5 py-2 md:py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 rounded-xl text-xs md:text-sm font-bold transition-all shadow-[0_0_20px_rgba(16,185,129,0.15)]"
                   >
                     <Play size={16}/> Start
@@ -582,11 +602,15 @@ const App = () => {
                     className={`flex items-center justify-between p-3 md:p-4 rounded-xl md:rounded-2xl border transition-all ${
                       item.status === 'sent' 
                         ? 'bg-emerald-500/10 border-emerald-500/30' 
-                        : 'bg-slate-800/20 border-slate-800/50 opacity-70 grayscale'
+                        : item.status === 'skipped'
+                        ? 'bg-slate-900/40 border-slate-800/60 opacity-60'
+                        : item.status === 'failed' 
+                        ? 'bg-rose-950/20 border-rose-900/40' 
+                        : 'bg-[#0f172a] border-slate-700/50 hover:border-emerald-500/30 hover:shadow-lg hover:shadow-emerald-500/5'
                     }`}
                   >
                     <div className="flex items-center gap-3 md:gap-4 overflow-hidden">
-                      <div className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center font-bold text-xs md:text-sm shadow-inner ${item.status === 'sent' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>
+                      <div className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center font-bold text-xs md:text-sm shadow-inner ${item.status === 'sent' ? 'bg-emerald-500/20 text-emerald-400' : item.status === 'failed' ? 'bg-rose-900/50 text-rose-400' : 'bg-slate-800 text-slate-500'}`}>
                         #
                       </div>
                       <div className="min-w-0">
