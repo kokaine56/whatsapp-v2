@@ -36,7 +36,7 @@ const App = () => {
   
   // Reads from Railway Environment Variables. 
   // If not set in Railway, it defaults to '101010'.
-  const MASTER_PASSCODE = import.meta.env.VITE_MASTER_PASSCODE || '101010';
+  const MASTER_PASSCODE = (typeof process !== 'undefined' && process.env && (process.env.VITE_MASTER_PASSCODE || process.env.REACT_APP_MASTER_PASSCODE)) || '101010';
   // ==========================================
 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
