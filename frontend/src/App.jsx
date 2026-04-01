@@ -70,7 +70,7 @@ const App = () => {
 
   const handleLogin = (e) => {
     e.preventDefault();
-    if (accessKey === 101010) {
+    if (accessKey === MASTER_PASSCODE) {
       setIsAuthenticated(true);
       setAuthError(false);
       addLog("SYSTEM: Authentication successful. Access granted.");
