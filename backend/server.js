@@ -68,11 +68,9 @@ app.get('/api/status', (req, res) => {
 });
 
 app.get('/api/campaign', (req, res) => {
-    // Send campaign state along with the memory count
     res.json({ ...campaignState, memoryCount: sentRegistry.size });
 });
 
-// Abort ongoing campaign
 app.post('/api/abort', (req, res) => {
     if (campaignState.isRunning) {
         campaignState.isRunning = false;
@@ -82,7 +80,6 @@ app.post('/api/abort', (req, res) => {
     res.json({ message: 'No campaign is currently running.' });
 });
 
-// Clear the sent history memory
 app.post('/api/reset-memory', (req, res) => {
     sentRegistry.clear();
     console.log('[NODE] Sent history memory has been wiped.');
@@ -112,52 +109,61 @@ app.post('/api/send', async (req, res) => {
 
     res.json({ message: 'Campaign handed over to Background Server successfully.' });
 
+    // Execute background loop asynchronously with fully randomized logic
     (async () => {
-        for (let i = 0; i < campaignState.queue.length; i++) {
-            // Check if process was aborted
-            if (!campaignState.isRunning || currentStatus !== 'CONNECTED') {
-                console.log('[NODE] Campaign halted.');
+        while (campaignState.isRunning && currentStatus === 'CONNECTED') {
+            
+            // 1. Find all indices of items that are still 'pending'
+            const pendingIndices = campaignState.queue
+                .map((item, index) => item.status === 'pending' ? index : -1)
+                .filter(index => index !== -1);
+
+            // If no pending items left, break the loop
+            if (pendingIndices.length === 0) {
+                console.log('[NODE] All tasks processed.');
                 break;
             }
 
-            const item = campaignState.queue[i];
+            // 2. Pick a COMPLETELY RANDOM pending contact
+            const randomIndex = pendingIndices[Math.floor(Math.random() * pendingIndices.length)];
+            const item = campaignState.queue[randomIndex];
 
             // AUTO-SKIP LOGIC: Prevent duplicates
             if (sentRegistry.has(item.number)) {
                 console.log(`[NODE] Skipping ${item.number} - Already in Sent History.`);
-                campaignState.queue[i].status = 'skipped';
+                campaignState.queue[randomIndex].status = 'skipped';
                 campaignState.sentCount++;
-                continue; // Skip the delay and move instantly to the next number
+                continue; // Skip the delay and instantly jump to the next random number
             }
             
             try {
                 const chatId = `${item.number}@c.us`;
                 await client.sendMessage(chatId, item.message);
-                console.log(`[NODE] Successfully sent to ${item.number}`);
+                console.log(`[NODE] Successfully sent to ${item.number} (Randomly picked)`);
                 
-                campaignState.queue[i].status = 'sent';
+                campaignState.queue[randomIndex].status = 'sent';
                 campaignState.sentCount++;
                 
-                // Add to registry after successful send
                 sentRegistry.add(item.number);
             } catch (err) {
                 console.error(`[NODE] Failed to send to ${item.number}`, err);
-                campaignState.queue[i].status = 'failed';
+                campaignState.queue[randomIndex].status = 'failed';
             }
 
-            // Apply randomized human-like delay between messages (±30% variance)
-            if (i < campaignState.queue.length - 1) {
-                const baseMs = campaignState.delayInterval * 1000;
-                const minMs = baseMs * 0.7;
-                const maxMs = baseMs * 1.3;
-                const randomizedDelay = Math.floor(Math.random() * (maxMs - minMs + 1) + minMs);
+            // 3. FULLY RANDOM DELAY LOGIC
+            if (pendingIndices.length > 1 && campaignState.isRunning) {
+                const maxMs = campaignState.delayInterval * 1000;
+                const minMs = 2000; // Hard minimum of 2 seconds to avoid instant API block
                 
-                console.log(`[NODE] Resting for ${randomizedDelay}ms...`);
+                // Picks any random time between 2s and the Max selected time
+                const randomizedDelay = Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
+                
+                console.log(`[NODE] Random Gap Selected: Resting for ${(randomizedDelay / 1000).toFixed(1)} seconds...`);
                 await new Promise(resolve => setTimeout(resolve, randomizedDelay));
             }
         }
         
-        console.log('[NODE] Background campaign sequence finished.');
+        console.log('[NODE] Background campaign sequence finished or aborted.');
         campaignState.isRunning = false;
     })();
 });
@@ -166,7 +172,7 @@ app.post('/api/logout', async (req, res) => {
     await client.logout();
     currentStatus = 'DISCONNECTED';
     campaignState.isRunning = false;
-    sentRegistry.clear(); // Wipe memory on logout
+    sentRegistry.clear(); 
     client.initialize(); 
     res.json({ message: 'Logged out successfully.' });
 });
