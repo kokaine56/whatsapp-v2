@@ -176,26 +176,20 @@ const App = () => {
   const downloadCSV = () => {
     if (queue.length === 0) return;
     
-    const headers = ["Name", "Number", "Variable_ID", "Status"];
+    // Export ONLY the numbers, one per line, making it perfect for re-uploading
+    const csvContent = queue.map(item => item.number).join('\n');
     
-    const csvRows = queue.map(item => {
-      const safeName = `"${item.name.replace(/"/g, '""')}"`;
-      const safeId = item.varId ? `"${item.varId.replace(/"/g, '""')}"` : "";
-      return `${safeName},${item.number},${safeId},${item.status}`;
-    });
-
-    const csvContent = [headers.join(','), ...csvRows].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `whatsapp_campaign_export_${new Date().getTime()}.csv`);
+    link.setAttribute('download', `whatsapp_numbers_${new Date().getTime()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     
-    addLog("Exported queue to CSV.");
+    addLog("Exported numbers list to CSV.");
   };
 
   const importContacts = () => {
@@ -256,7 +250,7 @@ const App = () => {
       return;
     }
 
-    addLog(`Handing over ${pending.length} contacts to Background Engine. Engine will pick randomly.`);
+    addLog(`Handing over ${pending.length} contacts to Background Node Engine...`);
 
     const payload = pending.map(item => {
       // Randomly pick one of the filled message variants for each contact
