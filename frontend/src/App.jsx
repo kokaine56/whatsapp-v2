@@ -33,15 +33,13 @@ const App = () => {
   // 🔒 SECURITY SETTINGS
   // ==========================================
   const ENABLE_LOCKSCREEN = true; // Set to false to skip the login screen entirely
-  
-  // Reads from Railway Environment Variables. 
-  // If not set in Railway, it defaults to '101010'.
-  const MASTER_PASSCODE = (typeof process !== 'undefined' && process.env && (process.env.VITE_MASTER_PASSCODE || process.env.REACT_APP_MASTER_PASSCODE)) || '101010';
+  // Note: Passcode verification is now securely handled by the Node.js backend!
   // ==========================================
 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [accessKey, setAccessKey] = useState('');
   const [authError, setAuthError] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
 
   const [numbersInput, setNumbersInput] = useState('');
   const [messages, setMessages] = useState([
@@ -71,15 +69,34 @@ const App = () => {
     setConsoleOutput(prev => [{ time: new Date().toLocaleTimeString(), msg }, ...prev].slice(0, 50));
   };
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    if (accessKey === MASTER_PASSCODE) {
-      setIsAuthenticated(true);
-      setAuthError(false);
-      addLog("SYSTEM: Authentication successful. Access granted.");
-    } else {
+    if (!accessKey) return;
+    
+    setIsVerifying(true);
+    try {
+      const res = await fetch('/api/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ passcode: accessKey })
+      });
+      
+      const data = await res.json();
+      
+      if (data.success) {
+        setIsAuthenticated(true);
+        setAuthError(false);
+        addLog("SYSTEM: Authentication successful. Access granted.");
+      } else {
+        setAuthError(true);
+        setAccessKey('');
+      }
+    } catch (err) {
       setAuthError(true);
       setAccessKey('');
+      addLog("ERR: Authentication server unreachable.");
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -358,7 +375,8 @@ const App = () => {
                   value={accessKey}
                   onChange={(e) => setAccessKey(e.target.value)}
                   placeholder="••••••"
-                  className={`w-full bg-[#030712] border ${authError ? 'border-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.1)]' : 'border-white/10 focus:border-emerald-500/50 focus:shadow-[0_0_20px_rgba(16,185,129,0.15)]'} rounded-xl py-4 pl-12 pr-4 text-lg outline-none transition-all placeholder:text-slate-700 font-mono tracking-[0.5em] text-center text-white`}
+                  disabled={isVerifying}
+                  className={`w-full bg-[#030712] border ${authError ? 'border-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.1)]' : 'border-white/10 focus:border-emerald-500/50 focus:shadow-[0_0_20px_rgba(16,185,129,0.15)]'} rounded-xl py-4 pl-12 pr-4 text-lg outline-none transition-all placeholder:text-slate-700 font-mono tracking-[0.5em] text-center text-white disabled:opacity-50`}
                   autoFocus
                 />
               </div>
@@ -371,10 +389,11 @@ const App = () => {
 
               <button
                 type="submit"
-                disabled={!accessKey}
+                disabled={!accessKey || isVerifying}
                 className="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 disabled:opacity-40 disabled:grayscale text-white rounded-xl text-sm font-bold tracking-wide transition-all shadow-[0_10px_30px_-10px_rgba(16,185,129,0.5)] hover:shadow-[0_10px_40px_-10px_rgba(16,185,129,0.7)] flex items-center justify-center gap-2"
               >
-                INITIALIZE <FastForward size={16}/>
+                {isVerifying ? <Loader2 size={16} className="animate-spin" /> : 'INITIALIZE'}
+                {!isVerifying && <FastForward size={16}/>}
               </button>
             </form>
           </div>
