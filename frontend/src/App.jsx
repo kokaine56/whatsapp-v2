@@ -283,7 +283,16 @@ const App = () => {
         .replace(/{name}/g, item.name || 'Client') // Fallback if no name provided
         .replace(/{id}/g, item.varId);
         
-      return { id: item.id, number: item.number, name: item.name, message: personalized };
+      // CRITICAL BUG FIX: Ensure the 'status' and 'varId' fields are passed to the backend
+      // Without 'status: pending', the backend assumed the task was already done and instantly stopped.
+      return { 
+        id: item.id, 
+        number: item.number, 
+        name: item.name, 
+        varId: item.varId,
+        message: personalized,
+        status: 'pending' 
+      };
     });
 
     try {
@@ -568,7 +577,7 @@ const App = () => {
                 ) : (
                   <button 
                     onClick={startBulkProcess}
-                    disabled={status !== 'CONNECTED'}
+                    disabled={status !== 'CONNECTED' || queue.filter(q => q.status === 'pending').length === 0}
                     className="flex-1 sm:flex-none flex justify-center items-center gap-2 px-4 md:px-5 py-2 md:py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 rounded-xl text-xs md:text-sm font-bold transition-all shadow-[0_0_20px_rgba(16,185,129,0.15)]"
                   >
                     <Play size={16}/> Start
