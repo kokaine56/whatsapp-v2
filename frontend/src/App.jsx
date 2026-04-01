@@ -210,15 +210,19 @@ const App = () => {
 
       if (trimmed.includes(',')) {
         const parts = trimmed.split(',').map(p => p.trim().replace(/^"|"$/g, ''));
-        name = parts[0] || 'Client';
+        name = parts[0] || '';
         number = (parts[1] || '').replace(/\D/g, '');
         extraId = parts[2] || extraId;
       } else {
         number = trimmed.replace(/\D/g, '');
       }
 
+      // Smart "91" handling: only add if exactly 10 digits and lacks 91. 
+      // If it starts with 91 and is 12 digits, leave it as is.
       if (number.length === 10) {
         number = '91' + number;
+      } else if (number.startsWith('91') && number.length > 10) {
+        // Keeps the existing 91 prefix safe
       }
 
       if (number && number.length >= 10) {
@@ -257,7 +261,7 @@ const App = () => {
       const randomMsg = activeMessages[Math.floor(Math.random() * activeMessages.length)];
       
       const personalized = randomMsg
-        .replace(/{name}/g, item.name)
+        .replace(/{name}/g, item.name || 'there') // Fallback if no name provided
         .replace(/{id}/g, item.varId);
         
       return { id: item.id, number: item.number, name: item.name, message: personalized };
@@ -577,24 +581,21 @@ const App = () => {
                     key={item.id} 
                     className={`flex items-center justify-between p-3 md:p-4 rounded-xl md:rounded-2xl border transition-all ${
                       item.status === 'sent' 
-                        ? 'bg-[#0f172a]/40 border-slate-800/40 opacity-50' 
-                        : item.status === 'skipped'
-                        ? 'bg-slate-900/40 border-slate-800/60 opacity-60'
-                        : item.status === 'failed' 
-                        ? 'bg-rose-950/20 border-rose-900/40' 
-                        : 'bg-[#0f172a] border-slate-700/50 hover:border-emerald-500/30 hover:shadow-lg hover:shadow-emerald-500/5'
+                        ? 'bg-emerald-500/10 border-emerald-500/30' 
+                        : 'bg-slate-800/20 border-slate-800/50 opacity-70 grayscale'
                     }`}
                   >
                     <div className="flex items-center gap-3 md:gap-4 overflow-hidden">
-                      <div className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center font-bold text-xs md:text-sm shadow-inner ${item.status === 'sent' ? 'bg-slate-800/80 text-slate-500' : item.status === 'skipped' ? 'bg-slate-800/50 text-slate-600' : item.status === 'failed' ? 'bg-rose-900/50 text-rose-400' : 'bg-slate-800 text-emerald-400 border border-slate-700'}`}>
-                        {item.name[0].toUpperCase()}
+                      <div className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center font-bold text-xs md:text-sm shadow-inner ${item.status === 'sent' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>
+                        #
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className={`text-xs md:text-sm font-semibold truncate ${item.status === 'skipped' ? 'text-slate-500 line-through decoration-slate-700' : 'text-slate-200'}`}>{item.name}</span>
-                          {item.varId && <span className="hidden sm:inline-block text-[10px] text-slate-500 font-mono bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800 truncate">#{item.varId}</span>}
+                          <span className={`text-xs md:text-sm font-semibold font-mono truncate ${item.status === 'sent' ? 'text-emerald-400' : 'text-slate-500'}`}>
+                            +{item.number}
+                          </span>
+                          {item.varId && <span className="hidden sm:inline-block text-[10px] text-slate-500 font-mono bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800 truncate">ID:{item.varId}</span>}
                         </div>
-                        <p className={`text-[11px] md:text-xs font-mono mt-0.5 md:mt-1 ${item.status === 'skipped' ? 'text-slate-600' : 'text-slate-400'}`}>+{item.number}</p>
                       </div>
                     </div>
                     
