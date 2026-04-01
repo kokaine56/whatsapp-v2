@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Users, 
   MessageSquare, 
@@ -20,7 +20,9 @@ import {
   KeyRound,
   Ban,
   RotateCcw,
-  FastForward
+  FastForward,
+  Upload,
+  Download
 } from 'lucide-react';
 
 const App = () => {
@@ -138,6 +140,53 @@ const App = () => {
     }
   };
 
+  // --- CSV Handling Functions ---
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target.result;
+      setNumbersInput(prev => prev + (prev ? '\n' : '') + text.trim());
+      addLog(`Loaded data from ${file.name}`);
+    };
+    reader.onerror = () => {
+      addLog("Error reading file.");
+    }
+    reader.readAsText(file);
+    e.target.value = null; // Reset input so same file can be uploaded again if needed
+  };
+
+  const downloadCSV = () => {
+    if (queue.length === 0) return;
+    
+    // Create CSV Headers
+    const headers = ["Name", "Number", "Variable_ID", "Status"];
+    
+    // Map queue data to CSV rows
+    const csvRows = queue.map(item => {
+      // Escape commas in names or IDs if any
+      const safeName = `"${item.name.replace(/"/g, '""')}"`;
+      const safeId = item.varId ? `"${item.varId.replace(/"/g, '""')}"` : "";
+      return `${safeName},${item.number},${safeId},${item.status}`;
+    });
+
+    const csvContent = [headers.join(','), ...csvRows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
+    // Create temp link and download
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `whatsapp_campaign_export_${new Date().getTime()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    addLog("Exported queue to CSV.");
+  };
+
   const importContacts = () => {
     if (!numbersInput.trim()) return;
     const lines = numbersInput.split('\n');
@@ -148,12 +197,16 @@ const App = () => {
       const trimmed = line.trim();
       if (!trimmed) continue;
 
+      // Skip common CSV header rows if copy/pasted
+      if (trimmed.toLowerCase().includes('name,number') || trimmed.toLowerCase().includes('name,phone')) continue;
+
       let name = 'Client';
       let number = '';
       let extraId = Math.floor(1000 + Math.random() * 9000).toString();
 
       if (trimmed.includes(',')) {
-        const parts = trimmed.split(',').map(p => p.trim());
+        // Handle standard CSV split, stripping quotes if present
+        const parts = trimmed.split(',').map(p => p.trim().replace(/^"|"$/g, ''));
         name = parts[0] || 'Client';
         number = (parts[1] || '').replace(/\D/g, '');
         extraId = parts[2] || extraId;
@@ -301,6 +354,8 @@ const App = () => {
 
       <main className="max-w-7xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 relative z-10">
         <div className="lg:col-span-5 space-y-6">
+          
+          {/* Contact Input Section */}
           <div className="bg-[#0f172a] rounded-2xl border border-slate-800/60 p-4 md:p-5 shadow-lg">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
               <div className="flex items-center gap-2">
@@ -316,9 +371,36 @@ const App = () => {
                 <RotateCcw size={10} /> Clear Memory ({memoryCount})
               </button>
             </div>
+
+            {/* CSV Controls */}
+            <div className="flex gap-3 mb-3">
+              <input 
+                type="file" 
+                accept=".csv,.txt" 
+                id="csv-upload" 
+                className="hidden" 
+                onChange={handleFileUpload}
+                disabled={isProcessing}
+              />
+              <label 
+                htmlFor="csv-upload" 
+                className="flex-1 flex items-center justify-center gap-2 py-2 bg-[#020617] hover:bg-slate-800/80 text-emerald-400 rounded-lg text-xs font-semibold cursor-pointer transition-all border border-slate-700/50"
+              >
+                <Upload size={14}/> Upload CSV
+              </label>
+              
+              <button 
+                onClick={downloadCSV}
+                disabled={queue.length === 0}
+                className="flex-1 flex items-center justify-center gap-2 py-2 bg-[#020617] hover:bg-slate-800/80 disabled:opacity-40 disabled:cursor-not-allowed text-blue-400 rounded-lg text-xs font-semibold transition-all border border-slate-700/50"
+              >
+                <Download size={14}/> Download CSV
+              </button>
+            </div>
+
             <textarea 
-              className="w-full h-32 md:h-36 bg-[#020617] border border-slate-800/80 rounded-xl p-3 text-xs sm:text-sm focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 outline-none transition-all placeholder:text-slate-600 font-mono"
-              placeholder="Paste numbers here (one per line)&#10;919876543210&#10;447700900123"
+              className="w-full h-28 md:h-32 bg-[#020617] border border-slate-800/80 rounded-xl p-3 text-xs sm:text-sm focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 outline-none transition-all placeholder:text-slate-600 font-mono"
+              placeholder="Paste numbers here or upload CSV&#10;919876543210&#10;447700900123"
               value={numbersInput}
               onChange={(e) => setNumbersInput(e.target.value)}
               disabled={isProcessing}
@@ -328,7 +410,7 @@ const App = () => {
               disabled={!numbersInput.trim() || isProcessing}
               className="w-full mt-4 py-3 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-2 border border-slate-700/50 shadow-sm"
             >
-              <Plus size={16}/> Add to Queue
+              <Plus size={16}/> Stage to Queue
             </button>
           </div>
 
@@ -370,7 +452,7 @@ const App = () => {
               {consoleOutput.map((log, i) => (
                 <div key={i} className="flex gap-2 md:gap-3 break-words">
                   <span className="text-slate-600 shrink-0">[{log.time}]</span>
-                  <span className={log.msg.includes('success') || log.msg.includes('CONNECTED') ? 'text-emerald-400/90' : (log.msg.includes('Error') || log.msg.includes('lost') || log.msg.includes('Failed') || log.msg.includes('abort') ? 'text-rose-400/90' : 'text-slate-400')}>
+                  <span className={log.msg.includes('success') || log.msg.includes('CONNECTED') || log.msg.includes('Exported') || log.msg.includes('Loaded') ? 'text-emerald-400/90' : (log.msg.includes('Error') || log.msg.includes('lost') || log.msg.includes('Failed') || log.msg.includes('abort') ? 'text-rose-400/90' : 'text-slate-400')}>
                     {log.msg}
                   </span>
                 </div>
