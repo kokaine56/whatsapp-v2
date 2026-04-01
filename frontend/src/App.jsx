@@ -61,7 +61,7 @@ const App = () => {
 
   const handleLogin = (e) => {
     e.preventDefault();
-    if (accessKey === '911612') {
+    if (accessKey === '887654') {
       setIsAuthenticated(true);
       setAuthError(false);
       addLog("SYSTEM: Authentication successful. Access granted.");
