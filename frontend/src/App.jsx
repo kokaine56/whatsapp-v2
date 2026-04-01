@@ -22,7 +22,8 @@ import {
   RotateCcw,
   FastForward,
   Upload,
-  Download
+  Download,
+  Shuffle
 } from 'lucide-react';
 
 const App = () => {
@@ -31,7 +32,15 @@ const App = () => {
   const [authError, setAuthError] = useState(false);
 
   const [numbersInput, setNumbersInput] = useState('');
-  const [message, setMessage] = useState('Hello {name}, your order #{id} is ready!');
+  // 5 message variants for anti-ban
+  const [messages, setMessages] = useState([
+    'Hello {name}, your order #{id} is ready!',
+    '',
+    '',
+    '',
+    ''
+  ]);
+  
   const [queue, setQueue] = useState([]);
   const [status, setStatus] = useState('DISCONNECTED'); 
   const [qrData, setQrData] = useState(null);
@@ -57,6 +66,12 @@ const App = () => {
       setAuthError(true);
       setAccessKey('');
     }
+  };
+
+  const handleMessageChange = (index, value) => {
+    const newMessages = [...messages];
+    newMessages[index] = value;
+    setMessages(newMessages);
   };
 
   // 1. Live Server & Background Campaign Polling
@@ -155,18 +170,15 @@ const App = () => {
       addLog("Error reading file.");
     }
     reader.readAsText(file);
-    e.target.value = null; // Reset input so same file can be uploaded again if needed
+    e.target.value = null; 
   };
 
   const downloadCSV = () => {
     if (queue.length === 0) return;
     
-    // Create CSV Headers
     const headers = ["Name", "Number", "Variable_ID", "Status"];
     
-    // Map queue data to CSV rows
     const csvRows = queue.map(item => {
-      // Escape commas in names or IDs if any
       const safeName = `"${item.name.replace(/"/g, '""')}"`;
       const safeId = item.varId ? `"${item.varId.replace(/"/g, '""')}"` : "";
       return `${safeName},${item.number},${safeId},${item.status}`;
@@ -176,7 +188,6 @@ const App = () => {
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     
-    // Create temp link and download
     const link = document.createElement('a');
     link.href = url;
     link.setAttribute('download', `whatsapp_campaign_export_${new Date().getTime()}.csv`);
@@ -197,7 +208,6 @@ const App = () => {
       const trimmed = line.trim();
       if (!trimmed) continue;
 
-      // Skip common CSV header rows if copy/pasted
       if (trimmed.toLowerCase().includes('name,number') || trimmed.toLowerCase().includes('name,phone')) continue;
 
       let name = 'Client';
@@ -205,7 +215,6 @@ const App = () => {
       let extraId = Math.floor(1000 + Math.random() * 9000).toString();
 
       if (trimmed.includes(',')) {
-        // Handle standard CSV split, stripping quotes if present
         const parts = trimmed.split(',').map(p => p.trim().replace(/^"|"$/g, ''));
         name = parts[0] || 'Client';
         number = (parts[1] || '').replace(/\D/g, '');
@@ -235,18 +244,28 @@ const App = () => {
   const startBulkProcess = async () => {
     if (status !== 'CONNECTED' || queue.length === 0) return;
     
+    const activeMessages = messages.filter(m => m.trim() !== '');
+    if (activeMessages.length === 0) {
+      addLog("Please enter at least one message template.");
+      return;
+    }
+
     const pending = queue.filter(i => i.status === 'pending');
     if (pending.length === 0) {
       addLog("No pending contacts to send to.");
       return;
     }
 
-    addLog(`Handing over ${pending.length} contacts to Background Node Engine...`);
+    addLog(`Handing over ${pending.length} contacts to Background Engine. Engine will pick randomly.`);
 
     const payload = pending.map(item => {
-      const personalized = message
+      // Randomly pick one of the filled message variants for each contact
+      const randomMsg = activeMessages[Math.floor(Math.random() * activeMessages.length)];
+      
+      const personalized = randomMsg
         .replace(/{name}/g, item.name)
         .replace(/{id}/g, item.varId);
+        
       return { id: item.id, number: item.number, name: item.name, message: personalized };
     });
 
@@ -259,7 +278,7 @@ const App = () => {
 
       if (res.ok) {
         setIsProcessing(true);
-        addLog("Campaign handed over. System will auto-skip previously sent numbers.");
+        addLog(`Campaign handed over successfully.`);
       } else {
         const errData = await res.json();
         addLog(`Node Engine rejected payload: ${errData.error}`);
@@ -414,24 +433,36 @@ const App = () => {
             </button>
           </div>
 
+          {/* Multiple Message Variants Section */}
           <div className="bg-[#0f172a] rounded-2xl border border-slate-800/60 p-4 md:p-5 shadow-lg">
             <div className="flex items-center gap-2 mb-4">
               <MessageSquare size={16} className="text-purple-400 shrink-0" />
-              <h2 className="text-sm font-semibold text-slate-100">Message Template</h2>
+              <h2 className="text-sm font-semibold text-slate-100">Message Variants</h2>
             </div>
-            <textarea 
-              className="w-full h-32 md:h-36 bg-[#020617] border border-slate-800/80 rounded-xl p-3 text-xs sm:text-sm focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 outline-none transition-all resize-none placeholder:text-slate-600 leading-relaxed"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              disabled={isProcessing}
-            />
-            <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[10px] text-slate-400 mb-3 leading-relaxed">
+              Fill up to 5 variations of your message. The app will randomly pick one for each recipient to bypass spam filters.
+            </p>
+            
+            <div className="space-y-3 max-h-[220px] overflow-y-auto pr-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-700 [&::-webkit-scrollbar-thumb]:rounded-full">
+              {messages.map((msg, index) => (
+                <textarea 
+                  key={index}
+                  className="w-full h-20 md:h-24 bg-[#020617] border border-slate-800/80 rounded-xl p-3 text-xs sm:text-sm focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 outline-none transition-all resize-none placeholder:text-slate-700 leading-relaxed"
+                  placeholder={`Variant ${index + 1}...`}
+                  value={msg}
+                  onChange={(e) => handleMessageChange(index, e.target.value)}
+                  disabled={isProcessing}
+                />
+              ))}
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-slate-800/60 flex flex-wrap items-center justify-between gap-2">
               <div className="flex gap-2">
                 <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded-md font-mono border border-slate-700/50">{' {name} '}</span>
                 <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded-md font-mono border border-slate-700/50">{' {id} '}</span>
               </div>
               <div className="flex items-center gap-1.5 text-amber-500/80 text-[9px] sm:text-[10px] uppercase tracking-wider font-semibold">
-                <AlertTriangle size={12}/> Avoid Spam Words
+                <Shuffle size={12}/> Random Selection
               </div>
             </div>
           </div>
@@ -462,7 +493,7 @@ const App = () => {
         </div>
 
         <div className="lg:col-span-7 space-y-6">
-          <div className="bg-[#0f172a] rounded-3xl border border-slate-800/60 shadow-xl flex flex-col h-[500px] sm:h-full sm:min-h-[720px] overflow-hidden">
+          <div className="bg-[#0f172a] rounded-3xl border border-slate-800/60 shadow-xl flex flex-col h-[500px] sm:h-full sm:min-h-[820px] overflow-hidden">
             <div className="p-4 md:p-6 border-b border-slate-800/60 flex flex-col sm:flex-row sm:justify-between sm:items-center bg-[#0f172a] gap-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 md:p-2.5 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20 shrink-0">
@@ -493,13 +524,13 @@ const App = () => {
                     className="bg-transparent text-xs text-slate-300 font-semibold focus:outline-none cursor-pointer disabled:opacity-50 appearance-none w-full"
                     style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
                   >
-                    <option value={20} className="bg-slate-900">20s Gap</option>
-                    <option value={30} className="bg-slate-900">30s Gap</option>
-                    <option value={45} className="bg-slate-900">45s Gap</option>
-                    <option value={60} className="bg-slate-900">1m Gap</option>
-                    <option value={120} className="bg-slate-900">2m Gap</option>
-                    <option value={300} className="bg-slate-900">5m Gap</option>
-                    <option value={600} className="bg-slate-900">10m Gap</option>
+                    <option value={20} className="bg-slate-900">Max 20s Gap</option>
+                    <option value={30} className="bg-slate-900">Max 30s Gap</option>
+                    <option value={45} className="bg-slate-900">Max 45s Gap</option>
+                    <option value={60} className="bg-slate-900">Max 1m Gap</option>
+                    <option value={120} className="bg-slate-900">Max 2m Gap</option>
+                    <option value={300} className="bg-slate-900">Max 5m Gap</option>
+                    <option value={600} className="bg-slate-900">Max 10m Gap</option>
                   </select>
                 </div>
 
@@ -598,7 +629,7 @@ const App = () => {
             <div className="p-4 border-t border-slate-800/60 bg-[#0f172a] flex justify-between items-center hidden sm:flex">
               <div className="flex items-center gap-2 text-slate-500 text-[10px] font-semibold uppercase tracking-wider">
                 <ShieldCheck size={14} className="text-emerald-500" />
-                Background Server Active — Auto-Skips previously sent numbers
+                Background Server Active — Fully random order & intervals
               </div>
             </div>
           </div>
